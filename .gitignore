@@ -1,0 +1,12 @@
+venv/
+build/
+dist/
+dist-release/
+__pycache__/
+*.pyc
+*.bak
+*.bak-*
+*.[0-9]*.bak
+signing/
+diagnostics/
+.DS_Store

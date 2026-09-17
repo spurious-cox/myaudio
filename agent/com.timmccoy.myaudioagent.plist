@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.timmccoy.myaudioagent</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/timmccoy/My_Applications/MyAudio/venv/bin/python</string>
+		<string>/Users/timmccoy/My_Applications/MyAudio/agent/myaudio_agent.py</string>
+	</array>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PYTHONDONTWRITEBYTECODE</key>
+		<string>1</string>
+	</dict>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>SoftResourceLimits</key>
+	<dict>
+		<!-- launchd's default soft limit is 256. The agent holds a socket per
+		     AirPlay receiver plus mDNS sockets that accumulate slowly; at 256 it
+		     stops being able to accept(), and every GUI call returns empty. -->
+		<key>NumberOfFiles</key>
+		<integer>4096</integer>
+	</dict>
+	<key>StandardErrorPath</key>
+	<string>/Users/timmccoy/Library/Logs/MyAudioAgent.err.log</string>
+</dict>
+</plist>

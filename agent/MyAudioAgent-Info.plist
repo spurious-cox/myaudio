@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key>
+	<string>com.timmccoy.myaudio.agent</string>
+	<key>CFBundleName</key>
+	<string>MyAudioAgent</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>MyAudio finds your HomePods and Apple TV on the local network to show and adjust their volume.</string>
+</dict>
+</plist>
