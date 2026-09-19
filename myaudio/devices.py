@@ -206,6 +206,8 @@ def build(store, airplay_rows, scan_count=None):
         hint = _no_speakers_hint()
     elif scan_count == -1:
         hint = "AirPlay scan failed — see ~/Library/Logs/MyAudio.log"
+    elif scan_count and not any(r.kind == "airplay" for r in rows):
+        hint = _filtered_out_hint(scan_count)
     return Snapshot(rows=rows, default_name=default,
                     sources=sorted(set(sources)), hint=hint, music=music,
                     hidden=hidden)
@@ -269,6 +271,21 @@ def _no_speakers_hint():
     return ("No AirPlay speakers found. The agent is running but its scan came back empty — "
             "check Python is enabled in System Settings ▸ Privacy & Security ▸ Local Network, "
             "and that Little Snitch has no deny rule for Python. See ~/Library/Logs/MyAudioAgent.log")
+
+
+def _filtered_out_hint(count):
+    """Devices answered the scan, and every one of them was set aside.
+
+    Without this the list is simply empty, which reads as "broken" when the
+    truth is "nothing here is a speaker this app drives". On a network of
+    Macs that is correct and expected; on a network of third-party speakers
+    it is a limitation worth stating outright.
+    """
+    return ("%d AirPlay device%s answered, but none is a speaker MyAudio can "
+            "control. It drives Apple speakers — HomePod, Apple TV, AirPort — "
+            "so other Macs are passed over, and third-party AirPlay speakers "
+            "(Sonos, Denon, an AirPlay 2 television) are not supported."
+            % (count, "" if count == 1 else "s"))
 
 
 def _percent(value):
