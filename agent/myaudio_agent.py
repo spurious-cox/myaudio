@@ -17,6 +17,7 @@ network permission at all.
 import asyncio
 import json
 import signal
+import subprocess
 import logging
 import os
 import resource
@@ -99,6 +100,59 @@ def make_handler(manager):
     return handle
 
 
+async def watch_for_removal(stopping, interval=30, strikes=3):
+    """Take the launchd job down when the app it belongs to is deleted.
+
+    Deleting the app does not stop this process — a running binary keeps its
+    files open — but it does make the job unstartable: launchd retries the
+    missing executable forever and reports EX_CONFIG, and the plist outlives
+    the app with nothing left to remove it. Only the still-running agent can
+    clean up, so it watches for its own bundle going away.
+
+    The strike count matters. An install does `rm -rf` then `cp -R`, so the
+    bundle really is absent for a second or two while this agent is running;
+    self-destructing there would break a routine upgrade. Three misses at
+    thirty seconds means a real deletion is caught inside two minutes and an
+    install is never noticed.
+    """
+    bundle = bundle_path()
+    if bundle is None:
+        return
+    missing = 0
+    while not stopping.is_set():
+        await asyncio.sleep(interval)
+        if os.path.exists(bundle):
+            missing = 0
+            continue
+        missing += 1
+        log.info("app bundle missing (%d of %d): %s", missing, strikes, bundle)
+        if missing < strikes:
+            continue
+        log.info("app is gone — removing the launchd job and exiting")
+        plist = os.path.expanduser(
+            "~/Library/LaunchAgents/com.timmccoy.myaudioagent.plist")
+        try:
+            os.unlink(plist)
+        except OSError:
+            pass
+        stopping.set()
+        # bootout ends this process, so it is the last thing done.
+        subprocess.run(["/bin/launchctl", "bootout",
+                        "gui/%d/com.timmccoy.myaudioagent" % os.getuid()],
+                       capture_output=True)
+        return
+
+
+def bundle_path():
+    """The .app this agent is running from, or None outside a bundle."""
+    here = os.path.dirname(os.path.realpath(__file__))
+    parts = here.split(os.sep)
+    for i in range(len(parts) - 1, 0, -1):
+        if parts[i].endswith(".app"):
+            return os.sep.join(parts[:i + 1])
+    return None
+
+
 async def main():
     os.makedirs(SUPPORT_DIR, exist_ok=True)
     # A socket file left by a crash blocks bind() and has to go -- but so does a
@@ -137,6 +191,7 @@ async def main():
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, stopping.set)
+    asyncio.ensure_future(watch_for_removal(stopping))
     try:
         async with server:
             await stopping.wait()

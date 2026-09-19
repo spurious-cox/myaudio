@@ -200,8 +200,12 @@ def build(store, airplay_rows, scan_count=None):
     # A stopped agent reports no scan count at all, which previously fell
     # through every branch and left an empty list with no explanation.
     if not _agent_reachable():
-        hint = ("AirPlay agent is not running, so no speakers can be found. Start it with:  "
-                "launchctl load ~/Library/LaunchAgents/com.timmccoy.myaudioagent.plist")
+        # Quitting and relaunching MyAudio is the fix most people want, and
+        # it repoints the entry as well. `bootstrap` is the counterpart to
+        # the `bootout` in Help; `load` is its deprecated predecessor.
+        hint = ("AirPlay agent is not running, so no speakers can be found. "
+                "Quit and relaunch MyAudio to start it, or run:  launchctl bootstrap "
+                "gui/$(id -u) ~/Library/LaunchAgents/com.timmccoy.myaudioagent.plist")
     elif scan_count == 0:
         hint = _no_speakers_hint()
     elif scan_count == -1:

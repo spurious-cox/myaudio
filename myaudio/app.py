@@ -6,22 +6,56 @@ the Hidden button in the header.
 
 import logging
 import os
+import subprocess
 import threading
 import time
 import tkinter as tk
 
 from . import __version__, bluetooth, coreaudio, devices, history, levelcsv, musicroute, restore
+from . import helptext
 from .agentclient import AgentClient, ensure_agent
 from .config import VOLUME_STEP, Store
 
-BG = "#1c1c1e"
-CARD = "#2c2c2e"
-CARD_ACTIVE = "#33333a"
-TEXT = "#f2f2f7"
-DIM = "#8e8e93"
-ACCENT = "#30d5c8"
-WARN = "#ff9f0a"
-DANGER = "#ff453a"
+# Two palettes, chosen once at launch. The names below are used in about
+# fifty places, so the appearance is switched by rebinding them rather than
+# by touching every widget.
+DARK = dict(bg="#1c1c1e", card="#2c2c2e", card_active="#33333a",
+            text="#f2f2f7", dim="#8e8e93", accent="#30d5c8",
+            warn="#ff9f0a", danger="#ff453a")
+# The dark accents are too pale to read on white: the teal drops to 1.5:1 and
+# the orange is worse. These are darkened until they carry their own weight
+# on a light ground.
+LIGHT = dict(bg="#f2f2f7", card="#ffffff", card_active="#e5e5ea",
+             text="#1c1c1e", dim="#6e6e73", accent="#0a7d72",
+             warn="#9a5b00", danger="#c9000f")
+
+
+def system_is_dark():
+    """True when macOS is in Dark appearance.
+
+    AppleInterfaceStyle exists only in Dark mode — in Light the key is absent
+    and `defaults read` exits non-zero, which is the documented way to tell.
+    If the question cannot be answered the app stays dark, which is what it
+    has always been.
+    """
+    try:
+        found = subprocess.run(
+            ["/usr/bin/defaults", "read", "-g", "AppleInterfaceStyle"],
+            capture_output=True, text=True, timeout=3)
+    except Exception:
+        return True
+    return found.returncode == 0 and "dark" in found.stdout.lower()
+
+
+_PALETTE = DARK if system_is_dark() else LIGHT
+BG = _PALETTE["bg"]
+CARD = _PALETTE["card"]
+CARD_ACTIVE = _PALETTE["card_active"]
+TEXT = _PALETTE["text"]
+DIM = _PALETTE["dim"]
+ACCENT = _PALETTE["accent"]
+WARN = _PALETTE["warn"]
+DANGER = _PALETTE["danger"]
 
 KIND_LABELS = {"bluetooth": "Bluetooth", "airplay": "AirPlay", "local": "Output"}
 POLL_MS = 2500
@@ -337,6 +371,141 @@ class SpeakerDialog(tk.Toplevel):
         self.message.config(text=message, fg=WARN)
 
 
+class HelpDialog(tk.Toplevel):
+    """What the app does, what it needs, and how to remove it.
+
+    Scrolled rather than paged: the removal instructions are the part people
+    come here for, and they should be reachable without hunting.
+    """
+
+    def __init__(self, parent):
+        super().__init__(parent, bg=BG)
+        self.withdraw()
+        self.title("MyAudio Help")
+        self.transient(parent)
+        # maxsize() is the largest the window manager will allow, which on
+        # macOS is the screen minus the menu bar and the Dock. Asking it is
+        # better than measuring the screen and guessing at both.
+        self.update_idletasks()
+        max_w, max_h = self.maxsize()
+        self.geometry("%dx%d+%d+%d" % (min(700, max_w), max_h, 120, 0))
+
+        body = tk.Frame(self, bg=BG, padx=20, pady=16)
+        body.pack(fill="both", expand=True)
+        tk.Label(body, text=f"MyAudio {__version__}", bg=BG, fg=TEXT,
+                 font=("SF Pro Text", 15, "bold")).pack(anchor="w")
+        # Said plainly and at the top: this toolkit gets no scroll events
+        # from macOS, so the wheel does nothing and people need telling.
+        tk.Label(body, text="Scroll by arrow keys  ·  Page Up / Page Down  ·  "
+                            "or drag the scrollbar",
+                 bg=BG, fg=ACCENT, font=("SF Pro Text", 13, "bold")
+                 ).pack(anchor="w", pady=(6, 0))
+
+        canvas = tk.Canvas(body, bg=BG, highlightthickness=0)
+        scroll = tk.Scrollbar(body, orient="vertical", command=canvas.yview)
+        inner = tk.Frame(canvas, bg=BG)
+        window = canvas.create_window((0, 0), window=inner, anchor="nw")
+        inner.bind("<Configure>",
+                   lambda _e: canvas.configure(scrollregion=canvas.bbox("all")))
+        # Without this the inner frame keeps its requested width, so the text
+        # never re-wraps to the window and the scrollbar measures the wrong
+        # height.
+        canvas.bind("<Configure>",
+                    lambda e: canvas.itemconfigure(window, width=e.width))
+        canvas.configure(yscrollcommand=scroll.set)
+        canvas.pack(side="left", fill="both", expand=True, pady=(10, 0))
+        scroll.pack(side="right", fill="y", pady=(10, 0))
+
+        def on_wheel(event):
+            # Scroll by SIGN, not by delta. A Magic Mouse and a trackpad send
+            # a stream of small smooth-scroll events whose delta can round to
+            # zero, so multiplying by it scrolls nothing at all; a wheel mouse
+            # sends larger steps and would fly. One line per event suits both,
+            # because both send many.
+            if event.delta:
+                canvas.yview_scroll(-1 if event.delta > 0 else 1, "units")
+            return "break"
+
+        def on_touchpad(event):
+            """Tk 9 sends precise scrolling here, not to <MouseWheel>.
+
+            A Magic Mouse and a trackpad are "precise" devices: Tk 9.0 on
+            macOS reports them as <<TouchpadScroll>>, and a window bound only
+            to <MouseWheel> never scrolls at all. The delta packs two signed
+            16-bit values, dx in the low half and dy in the high half.
+            """
+            packed = event.delta
+            dy = (packed >> 16) & 0xFFFF
+            if dy >= 0x8000:
+                dy -= 0x10000
+            if dy:
+                canvas.yview_scroll(-1 if dy > 0 else 1, "units")
+            return "break"
+
+        def on_key(event):
+            if event.keysym in ("Down", "Next"):
+                canvas.yview_scroll(3 if event.keysym == "Down" else 15, "units")
+            elif event.keysym in ("Up", "Prior"):
+                canvas.yview_scroll(-3 if event.keysym == "Up" else -15, "units")
+            elif event.keysym == "Home":
+                canvas.yview_moveto(0)
+            elif event.keysym == "End":
+                canvas.yview_moveto(1)
+            return "break"
+
+        self._wheel = on_wheel
+        self.bind_all("<MouseWheel>", on_wheel, add="+")
+        self.bind_all("<<TouchpadScroll>>", on_touchpad, add="+")
+        # Arrow keys, Page Up/Down and Home/End, so the window is usable with
+        # no pointing device that scrolls at all.
+        for key in ("<Up>", "<Down>", "<Prior>", "<Next>", "<Home>", "<End>"):
+            self.bind(key, on_key)
+        self.canvas = canvas
+        canvas.focus_set()
+
+        for title, paragraphs in helptext.SECTIONS:
+            tk.Label(inner, text=title, bg=BG, fg=ACCENT,
+                     font=("SF Pro Text", 13, "bold")).pack(anchor="w", pady=(12, 4))
+            for text in paragraphs:
+                # An indented line is a command to paste: shown in a mono face
+                # so its spacing survives, and selectable for copying.
+                if text.startswith("    "):
+                    entry = tk.Entry(inner, bg=CARD, fg=TEXT, relief="flat",
+                                     font=("SF Mono", 11), width=60,
+                                     readonlybackground=CARD, highlightthickness=0)
+                    entry.insert(0, text.strip())
+                    entry.configure(state="readonly")
+                    entry.pack(anchor="w", fill="x", pady=2)
+                else:
+                    tk.Label(inner, text=text, bg=BG, fg=DIM, justify="left",
+                             wraplength=560, font=("SF Pro Text", 11)).pack(anchor="w")
+
+        # padx/pady on a WIDGET take one distance, not the (top, bottom)
+        # tuple pack() accepts. The tuple form threw "expected screen
+        # distance" inside the button's callback, where nothing surfaces it,
+        # so Help simply did nothing.
+        buttons = tk.Frame(self, bg=BG)
+        buttons.pack(fill="x", padx=20, pady=(0, 14))
+        mkbtn(buttons, "Done", self._close, width=7).pack(side="right")
+        # The same line as the header, repeated here: the window is tall
+        # enough that the top of it is off screen by the time anyone is deep
+        # enough to wonder how to keep going.
+        # Shorter than the header line and anchored west: at the window's
+        # width this shares the bar with the Done button, and the long form
+        # was clipped at both ends.
+        tk.Label(buttons, text="Arrow keys · Page Up/Down · drag the scrollbar",
+                 bg=BG, fg=ACCENT, font=("SF Pro Text", 12, "bold"),
+                 anchor="w").pack(side="left", fill="x", expand=True)
+
+        self.protocol("WM_DELETE_WINDOW", self._close)
+        self.update_idletasks()
+        self.deiconify()
+
+    def _close(self):
+        self.unbind_all("<MouseWheel>")
+        self.destroy()
+
+
 class HiddenDialog(tk.Toplevel):
     """The devices the user has hidden, and the way back."""
 
@@ -448,10 +617,11 @@ class MyAudio(tk.Tk):
         self.restore_switch = Switch(footer, self._restore_and_exit, bg=BG, accent=DANGER)
         self.restore_switch.pack(side="left", padx=(0, 10))
         tk.Label(footer, bg=BG, fg=DIM, font=("SF Pro Text", 11), justify="left",
-                 anchor="w", wraplength=520,
+                 anchor="w", wraplength=460,
                  text="Restore devices to how I found them and exit — puts every volume, "
                       "connection and speaker routing back to what it was when MyAudio "
                       "opened, then quits.").pack(side="left", fill="x", expand=True)
+        mkbtn(footer, "Help", self.show_help, width=6).pack(side="right", padx=(10, 0))
 
         self.hint = tk.Label(self, bg=BG, fg=WARN, font=("SF Pro Text", 11),
                              anchor="w", wraplength=600, justify="left")
@@ -495,10 +665,18 @@ class MyAudio(tk.Tk):
         self.after(POLL_MS, self._poll)
 
     def _build_menu(self):
-        """macOS puts Help alongside the app menu; Tk needs the name "help"."""
+        """An ordinary Help menu, NOT the system-managed one.
+
+        A Tk menu named "help" is adopted by macOS, which adds its own
+        "MyAudio Help" entry pointing at a help book this app does not have —
+        so the menu showed two identical entries, one of them reporting that
+        help is not available. An ordinary menu labelled Help carries only
+        what is put in it.
+        """
         menubar = tk.Menu(self)
-        helpmenu = tk.Menu(menubar, name="help", tearoff=0)
+        helpmenu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Help", menu=helpmenu)
+        helpmenu.add_command(label="MyAudio Help", command=self.show_help)
         helpmenu.add_command(label="MyAudio Version History",
                              command=self._show_history)
         self.configure(menu=menubar)
@@ -525,6 +703,9 @@ class MyAudio(tk.Tk):
             self._opening_state = restore.capture(self.airplay)
         except Exception:
             log.exception("could not capture opening device state")
+
+    def show_help(self):
+        HelpDialog(self)
 
     def _restore_and_exit(self, _on):
         if self._opening_state is None:
