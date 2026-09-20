@@ -82,6 +82,18 @@ def _job(bundle):
     }
 
 
+# When the agent was last bootstrapped by this process. The agent takes a few
+# seconds to open its socket, and during that gap it is unreachable for a
+# reason the user does not need to act on.
+_bootstrapped_at = 0.0
+STARTING_SECONDS = 20.0
+
+
+def starting():
+    """True when we have just started the agent and it is still coming up."""
+    return 0 < (time.time() - _bootstrapped_at) < STARTING_SECONDS
+
+
 def ensure_agent():
     """Install or refresh the launchd job, so a copy of this bundle anywhere
     gets an agent pointing at itself. Returns (ok, message)."""
@@ -141,6 +153,8 @@ def ensure_agent():
         return False, "could not start the AirPlay agent: %s" % detail
 
     log.info("agent job installed for %s", bundle)
+    global _bootstrapped_at
+    _bootstrapped_at = time.time()
     return True, "agent installed"
 
 

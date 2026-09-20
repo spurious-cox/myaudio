@@ -29,6 +29,10 @@ class Store:
         self._data = self._load()
         self._dirty_credentials = set()
         self._dirty_hidden = False
+        # save() rebuilds the file from disk and copies forward only what this
+        # process set, so a new key that is not named there is written and then
+        # dropped by the very next save.
+        self._dirty_routing = False
         self._hidden_mtime = None
         self._seed_credentials()
 
@@ -82,6 +86,13 @@ class Store:
             # process that actually changed it may overwrite what is on disk.
             if self._dirty_hidden:
                 merged["hidden"] = list(self._data.get("hidden", []))
+            if self._dirty_routing:
+                merged["airplay_outputs"] = list(self._data.get("airplay_outputs", []))
+                # A setting this process never touched is left exactly as the
+                # other process wrote it.
+                merged.pop("cc_icon_x", None)
+            elif "airplay_outputs" in merged:
+                self._data.setdefault("airplay_outputs", merged["airplay_outputs"])
             self._data = merged
             tmp = self.path + ".tmp"
             with open(tmp, "wb") as fh:
@@ -178,6 +189,27 @@ class Store:
     def known_output_targets(self):
         with self._lock:
             return dict(self._data.get("output_targets", {}))
+
+    # -- the AirPlay speaker the Mac is playing through -------------------
+    def airplay_outputs(self):
+        """The speakers last routed to, as a list.
+
+        CoreAudio names the device it streams to "AirPlay" and nothing more,
+        however many speakers are playing, so this is the only record of which
+        rooms they are. Remembered across launches because the routing outlives
+        the app.
+        """
+        with self._lock:
+            return list(self._data.get("airplay_outputs", []))
+
+    def set_airplay_outputs(self, names):
+        names = list(names)
+        with self._lock:
+            if self._data.get("airplay_outputs") == names:
+                return
+            self._data["airplay_outputs"] = names
+            self._dirty_routing = True
+        self.save()
 
     # -- credentials -----------------------------------------------------
     def credentials(self, key):

@@ -12,6 +12,7 @@ import time
 import tkinter as tk
 
 from . import __version__, bluetooth, coreaudio, devices, history, levelcsv, musicroute, restore
+from . import sysoutput
 from . import helptext
 from .agentclient import AgentClient, ensure_agent
 from .config import VOLUME_STEP, Store
@@ -208,13 +209,16 @@ class DeviceCard(tk.Frame):
         self.sub.config(text="   ".join(bits) + (f"   • {row.note}" if row.note else ""),
                         fg=sub_fg)
 
-        # An AirPlay row has no switch: its only action is Speakers…, and a
-        # switch that cannot be clicked simply attracts clicks that do nothing.
-        if row.kind == "airplay":
+        # Every row that can become the output gets a switch, AirPlay included:
+        # CoreAudio cannot route to a speaker, but the Sound settings pane can,
+        # and sysoutput drives it. A speaker that is asleep or unpaired still
+        # has no switch, because macOS will not route to one.
+        if row.kind == "airplay" and not row.can_select:
             self.switch.grid_remove()
         else:
             self.switch.grid()
-            self.switch.set_state(row.on, row.can_toggle or row.can_select)
+            on = row.is_default if row.kind == "airplay" else row.on
+            self.switch.set_state(on, row.can_toggle or row.can_select)
 
         # Every row that can send its audio somewhere gets the same control:
         # AirPlay devices send their own sound, the Mac sends Music.
@@ -238,11 +242,28 @@ class DeviceCard(tk.Frame):
             set_enabled(button, row.can_step)
 
 
+def _share_menu(window, parent):
+    """Give a dialog the app's menu bar.
+
+    A Toplevel with no menu of its own gets the stock one macOS supplies,
+    whose Help entry answers that no help is available — which is what a
+    dialog left open while reaching for Help reported. Pointing the dialog at
+    the same menu keeps Help working wherever the user is.
+    """
+    menubar = getattr(parent, "_menubar", None)
+    if menubar is not None:
+        try:
+            window.configure(menu=menubar)
+        except tk.TclError:
+            pass
+
+
 class PinDialog(tk.Toplevel):
     """Collects the code the speaker shows on screen."""
 
     def __init__(self, parent, device_name, on_submit):
         super().__init__(parent, bg=BG)
+        _share_menu(self, parent)
         self.withdraw()
         self.title("Pair")
         self.on_submit = on_submit
@@ -301,6 +322,7 @@ class SpeakerDialog(tk.Toplevel):
 
     def __init__(self, parent, device_name, options, on_apply, subtitle=None):
         super().__init__(parent, bg=BG)
+        _share_menu(self, parent)
         # Build hidden: the window manager draws the frame before Tk fills it,
         # so an empty white shell appears first otherwise.
         self.withdraw()
@@ -383,6 +405,7 @@ class HelpDialog(tk.Toplevel):
         self.withdraw()
         self.title("MyAudio Help")
         self.transient(parent)
+        _share_menu(self, parent)
         # maxsize() is the largest the window manager will allow, which on
         # macOS is the screen minus the menu bar and the Dock. Asking it is
         # better than measuring the screen and guessing at both.
@@ -511,6 +534,7 @@ class HiddenDialog(tk.Toplevel):
 
     def __init__(self, parent, hidden, on_show, on_show_all):
         super().__init__(parent, bg=BG)
+        _share_menu(self, parent)
         self.withdraw()
         self.title("Hidden devices")
         self.transient(parent)
@@ -566,6 +590,10 @@ class MyAudio(tk.Tk):
         self.configure(bg=BG)
 
         self.store = Store()
+        # The Mac can already be playing through a speaker from a previous run,
+        # so the remembered name is loaded before the first refresh, then
+        # confirmed against what macOS actually has.
+        self._airplay_outputs = self.store.airplay_outputs()
         # All network work lives in the launchd agent; see agent/myaudio_agent.py.
         # The job is (re)installed here so the bundle works wherever it is put,
         # not just where it was built.
@@ -632,6 +660,10 @@ class MyAudio(tk.Tk):
         # Photograph the devices as we found them, so the restore switch has
         # something to put back. Off the UI thread: it queries every device.
         threading.Thread(target=self._capture_opening_state, daemon=True).start()
+        # After the first snapshot exists, check whether the Mac is already
+        # streaming to a speaker and to which one.
+        self.after(3000, lambda: threading.Thread(
+            target=self._confirm_airplay_output, daemon=True).start())
         threading.Thread(target=self._prefetch_speakers, daemon=True).start()
         self._build_menu()
         self.protocol("WM_DELETE_WINDOW", self._close)
@@ -674,6 +706,8 @@ class MyAudio(tk.Tk):
         what is put in it.
         """
         menubar = tk.Menu(self)
+        # Kept so every dialog can point at the same one.
+        self._menubar = menubar
         helpmenu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Help", menu=helpmenu)
         helpmenu.add_command(label="MyAudio Help", command=self.show_help)
@@ -806,7 +840,8 @@ class MyAudio(tk.Tk):
         try:
             self.airplay.poll()
             snapshot = devices.build(self.store, self.airplay.snapshot(),
-                                     self.airplay.last_scan_count)
+                                     self.airplay.last_scan_count,
+                                     airplay_outputs=self._airplay_outputs)
             for row in snapshot.rows:
                 if row.key in self._row_errors:
                     row.note = self._row_errors[row.key]
@@ -856,15 +891,25 @@ class MyAudio(tk.Tk):
         if row is None:
             return
         if row.kind == "airplay":
-            # The switch is power. Routing lives entirely in Speakers…, so the
-            # two controls no longer overlap.
-            if not row.can_toggle:
-                self.status.config(text=f"{row.name} does not report a power state.")
+            # The switch selects. Turning it off would have to name a device to
+            # go back to, which the user has not chosen, so the way back is to
+            # switch some other row on.
+            if not on:
+                self.status.config(
+                    text=f"Switch another output on to stop playing through {row.name}.")
+                threading.Thread(target=self._refresh, daemon=True).start()
                 return
-            self.status.config(
-                text=f"Turning {row.name} {'on' if on else 'off'}…")
-            self._submit(lambda: self.airplay.set_power(key, on),
-                         lambda result: self._power_done(row.name, on, result))
+            if not row.can_select:
+                self.status.config(text=f"{row.name} is not available as an output.")
+                return
+            if not sysoutput.trusted():
+                self.status.config(
+                    text="Grant MyAudio Accessibility permission to play through AirPlay speakers.")
+                self._submit(sysoutput.request_trust, lambda _r: None)
+                return
+            self.status.config(text=f"Switching output to {row.name}…")
+            self._submit(lambda: sysoutput.select(row.name),
+                         lambda result: self._select_done(row.name, result))
             return
         if on:
             if row.is_default:
@@ -884,6 +929,46 @@ class MyAudio(tk.Tk):
         elif row.kind == "local":
             self.status.config(
                 text=f"{row.name} is a built-in output — pick another device to switch away from it.")
+
+    def _confirm_airplay_output(self):
+        """Learn which speaker the Mac is actually streaming to.
+
+        The remembered name goes stale when the output is changed outside
+        MyAudio — in Control Center, or by another Mac's handoff. Reading the
+        Sound settings pane is the only way to tell, and it costs a few
+        seconds, so it runs once at startup and only when CoreAudio says an
+        AirPlay device is the output at all.
+        """
+        snapshot = self._snapshot
+        if snapshot is None:
+            return
+        streaming = any(r.transport == "airp" for r in snapshot.rows) or any(
+            r.kind == "airplay" and r.is_default for r in snapshot.rows)
+        if not streaming or not sysoutput.trusted():
+            return
+        # The settings pane names one device, so it cannot describe a set of
+        # speakers and must not overwrite one.
+        if len(self._airplay_outputs) > 1:
+            return
+        selected = next((name for name, _kind, on in sysoutput.outputs() if on), "")
+        if selected and [selected] != self._airplay_outputs:
+            self._airplay_outputs = [selected]
+            self.store.set_airplay_outputs([selected])
+            threading.Thread(target=self._refresh, daemon=True).start()
+
+    def _select_done(self, name, result):
+        ok, message = result
+        # CoreAudio calls the speaker it is streaming to "AirPlay" and nothing
+        # more, so the name has to be remembered here for the row to be shown
+        # as the active output.
+        if ok:
+            # An ordinary click replaces whatever was playing.
+            self._airplay_outputs = [name]
+            self.store.set_airplay_outputs([name])
+        self.status.config(text=message)
+        # The row only goes teal once macOS agrees, so refresh either way
+        # rather than leaving a switch showing a state that did not take.
+        threading.Thread(target=self._refresh, daemon=True).start()
 
     def _connect_then_select(self, row):
         ok, err = bluetooth.set_connected(row.address, True)

@@ -94,6 +94,13 @@ fi
 
 codesign --force --deep --timestamp --sign "$SIGN_ID" dist/MyAudio.app
 
+# Installing is the default here and in every other project's build.sh.
+# --no-install builds without touching /Applications.
+if [[ "$1" == "--no-install" ]]; then
+    echo "==> --no-install: leaving /Applications alone"
+    exit 0
+fi
+
 echo "==> installing to /Applications"
 rm -rf /Applications/MyAudio.app
 cp -R dist/MyAudio.app /Applications/

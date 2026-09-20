@@ -1,4 +1,4 @@
-"""The Help window's text — v2.0
+"""The Help window's text — v2.5
 
 Kept apart from the window that shows it so the wording can be edited without
 touching layout code, and so the README can quote the same sentences.
@@ -9,6 +9,19 @@ anywhere, least of all in the part that explains how to remove it.
 v2.0 gathers every Terminal command into one section. They had been repeated
 under the agent and under removal, which made both longer and left two places
 to keep in step.
+
+v2.5 names devices generically. Examples used the names on this Mac, which
+mean nothing to anyone else reading them.
+
+v2.4 describes the Speakers… menus, which are now the only way a HomePod is
+given something to play.
+
+v2.3 states plainly that the Mac plays through one speaker at a time, and
+where several at once does exist.
+
+v2.1 adds the section on playing through an AirPlay speaker, which needs
+Accessibility permission and is the one thing in the app that opens another
+window.
 
 An indented line is rendered as a command in a selectable field.
 """
@@ -29,6 +42,49 @@ SECTIONS = (
         "here — the toolkit this window is drawn with receives no scroll "
         "events from macOS.",
     )),
+    ("Playing through a HomePod", (
+        "A HomePod has no switch, because it has no audio of its own — it "
+        "plays what something else sends it. You choose it from a SPEAKERS… "
+        "menu on whichever device is doing the playing:",
+        "Speakers… on the Mac's own row sends the MUSIC APP to any speakers "
+        "you tick, as many at once as you like.",
+        "Speakers… on an Apple TV's row sends the APPLE TV's sound to any "
+        "speakers you tick, again several at once, and this Mac can be one "
+        "of them.",
+        "Tick a speaker and its row says so straight away: it reads \"playing "
+        "from\" and the name of whatever is feeding it, in teal, and its "
+        "volume controls work while it plays. Until something is sending to "
+        "it, the row says it is idle and points back at these menus.",
+        "TWO DEVICES WITH THE SAME NAME cannot be told apart. The list shows "
+        "both, and nothing in either one says which room it is, so rename one "
+        "of them in the Home app before relying on the choice.",
+    )),
+    ("Playing through an Apple TV", (
+        "An Apple TV has a switch, like any other output: turn it on and the "
+        "Mac plays through it.",
+        "macOS does not let an app route audio to an AirPlay speaker directly "
+        "— the only place that choice exists is the Sound settings pane. So "
+        "MyAudio opens that pane, picks the speaker, and closes it again. You "
+        "will see the window appear for a second or two. If System Settings "
+        "was already open, it is left open.",
+        "This needs Accessibility permission, which macOS asks for the first "
+        "time you use it: System Settings ▸ Privacy & Security ▸ "
+        "Accessibility, then switch MyAudio on. Until it is granted, the "
+        "AirPlay switches report what is missing rather than doing nothing.",
+        "ONE SPEAKER AT A TIME. The Mac has a single output, and macOS "
+        "offers no way to send it to two AirPlay speakers at once — not in "
+        "Sound settings and not in Control Center, where picking a speaker "
+        "replaces the one before it.",
+        "Several speakers at once is something a SOURCE does, not the Mac. "
+        "Use Speakers… on the Mac's own row to send the Music app to as many "
+        "speakers as you like, or Speakers… on an Apple TV's row to send its "
+        "audio to several, including this Mac.",
+        "To stop playing through a speaker, switch a different output on. "
+        "There is no 'off' for a speaker, because turning one off would have "
+        "to pick somewhere else for the sound to go.",
+        "An Apple TV that is asleep or not yet paired has no switch either, "
+        "because macOS will not route to one that is not ready.",
+    )),
     ("Permissions it needs", (
         "AirPlay speakers are found by a small background agent, because "
         "macOS grants Local Network permission to a launchd process and not "
@@ -40,6 +96,8 @@ SECTIONS = (
         "their volume, but the connect switch does nothing.",
         "Sending Music to a speaker drives the Music app, so macOS asks for "
         "permission to control it the first time.",
+        "Playing the whole Mac through an AirPlay speaker needs Accessibility "
+        "permission — see the section above.",
     )),
     ("Which speakers it supports", (
         "Apple speakers: HomePod, HomePod mini, Apple TV and AirPort "

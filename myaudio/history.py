@@ -1,7 +1,11 @@
-"""Version history shown under Help ▸ Version History — v1.0
+"""Version history shown under Help ▸ Version History — v1.1
 
 Newest first. Every future release must add an entry here — the window reads
 this list directly, so an unrecorded version is a visibly stale history.
+
+The numbers restart at 1.0.0 with the first public release. Everything above
+that in age, up to 1.27.0, belongs to the July development series, so read the
+dates rather than the numbers.
 """
 
 GENERATED_BY = (
@@ -12,6 +16,40 @@ GENERATED_BY = (
 
 # (version, date, summary)
 HISTORY = [
+    ("1.4.2", "2026-09-19",
+     "The version history had not been written since July, so the window "
+     "showed nothing about any of the released versions. Every release since "
+     "is recorded, and the note above explains why the numbers restart."),
+    ("1.4.1", "2026-09-19",
+     "Help reached from an open dialog reported that no help was available: a "
+     "dialog with no menu of its own is given the stock one by macOS. Every "
+     "dialog now shares the app's menu. The help text also names devices "
+     "generically instead of using the names on the Mac it was written on."),
+    ("1.4.0", "2026-09-19",
+     "Only a device with audio of its own — an Apple TV — has a switch. A "
+     "HomePod plays what something else sends it, so its row reports, sets "
+     "volume, and says to choose it from a Speakers… menu. Two switches for "
+     "one speaker contradicted each other as soon as one showed teal."),
+    ("1.3.0", "2026-09-19",
+     "Playing through several AirPlay speakers at once was attempted and "
+     "removed: macOS replaces the output rather than adding to it, in Control "
+     "Center as much as in Sound settings. Several speakers at once belongs to "
+     "a source — the Music app, or an Apple TV — which Speakers… already does."),
+    ("1.1.0", "2026-09-19",
+     "The Mac can play through an AirPlay speaker. CoreAudio has no device for "
+     "one, so MyAudio opens the Sound settings pane, selects the speaker and "
+     "closes it again; it needs Accessibility permission. While streaming, "
+     "CoreAudio calls the output simply “AirPlay”, so the speaker it really is "
+     "gets named on its own row. The hint to relaunch no longer appears while "
+     "the agent is still starting."),
+    ("1.0.5", "2026-09-18",
+     "A Help window, reachable from the menu and a button at the bottom right, "
+     "and an agent that removes its own launchd job once the app is deleted."),
+    ("1.0.1", "2026-09-17",
+     "The AirPlay list says why it is empty when every device found was one "
+     "MyAudio does not drive, rather than showing nothing."),
+    ("1.0.0", "2026-09-17",
+     "First public release."),
     ("1.27.0", "2026-07-26",
      "Speaker lists are fetched shortly after the app opens and kept up to "
      "date, so Choose location appears already filled in instead of pausing "
@@ -59,8 +97,8 @@ HISTORY = [
      "The switch on an AirPlay row was still routing Music, so clicking a room "
      "expecting TV sound quietly sent music there instead. Routing now lives "
      "only in Speakers…, and the switch is simply power. Each row also says "
-     "what it is doing — “sending to Bedroom, Kitchen”, “playing from Living "
-     "Room”, or a prompt to use Speakers… when it is doing nothing."),
+     "what it is doing — “sending to” or “playing from”, naming the other "
+     "device, or a prompt to use Speakers… when it is doing nothing."),
     ("1.20.0", "2026-07-26",
      "Replaced the ♪ Music button with a Speakers… picker on the Mac's row, so "
      "every row now works the same way: Speakers… chooses where that device's "

@@ -31,6 +31,11 @@ OPTIONS = {
         "zeroconf",
         "cryptography",
         "charset_normalizer",
+        # sysoutput drives the Sound settings pane through the accessibility
+        # API. Listed as a package, not an include: py2app buries an included
+        # module's binaries inside python314.zip, where codesign cannot reach
+        # them and notarization fails.
+        "ApplicationServices",
     ],
     # pyatv pulls miniaudio, whose cffi extension py2app misses on its own.
     "includes": ["_cffi_backend"],

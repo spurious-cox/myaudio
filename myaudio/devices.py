@@ -1,14 +1,32 @@
-"""Merges the CoreAudio, Bluetooth and AirPlay views into one device list — v1.2
+"""Merges the CoreAudio, Bluetooth and AirPlay views into one device list — v1.8
 
 v1.3: devices the user has hidden are dropped from the row list, and the
 hidden set is read from the store so a hidden AirPlay speaker still lists.
+
+v1.4: AirPlay rows can be selected as the system output, through sysoutput.
+Once macOS is routing to one it may also publish it as a CoreAudio device, so
+matching local rows are folded into the AirPlay row rather than listed twice.
+
+v1.5: while the agent is still starting, the empty list says so instead of
+telling the user to relaunch the app they just opened.
+
+v1.6: when the Mac is routed to an AirPlay speaker, CoreAudio publishes one
+device called "AirPlay" — never the speaker's name — so that row is folded
+into the speaker it belongs to instead of being listed as an output of its own.
+
+v1.7: several speakers can play at once, so that fold names a set rather than
+one speaker, and every speaker in it shows as active.
+
+v1.8: only a device with audio of its own — an Apple TV — offers a switch. A
+HomePod is fed by something else, so its row reports, sets volume, and says
+where the choice is made.
 """
 
 import os
 import socket
 from dataclasses import dataclass, field
 
-from . import bluetooth, coreaudio, musicroute
+from . import agentclient, bluetooth, coreaudio, musicroute
 
 KIND_ORDER = {"bluetooth": 0, "airplay": 1, "local": 2}
 
@@ -28,6 +46,7 @@ class Row:
     can_step: bool = False
     is_default: bool = False
     uid: str | None = None            # CoreAudio UID, when the Mac can route to it
+    transport: str = ""               # CoreAudio transport: usb, blue, airp, bltn
     address: str = ""                 # Bluetooth MAC, for connect/disconnect
     connected: bool = False           # Bluetooth link is up (independent of `on`)
     can_toggle: bool = False          # On/Off can connect/disconnect this device
@@ -63,7 +82,30 @@ class Snapshot:
     hidden: list = field(default_factory=list)  # [(key, name)] the user hid
 
 
-def build(store, airplay_rows, scan_count=None):
+def _is_source(airplay_row):
+    """True for an AirPlay device with audio of its own — an Apple TV.
+
+    A HomePod only plays what something else sends it, which decides both
+    whether it can forward audio and whether it gets a switch.
+    """
+    return (airplay_row.get("supports_output_devices", False)
+            and airplay_row.get("model", "").lower().startswith(("gen", "appletv")))
+
+
+def _row_is_source(row):
+    """_is_source, for a built Row rather than the agent's dict."""
+    return (row.supports_output_devices
+            and row.model.lower().startswith(("gen", "appletv")))
+
+
+def _is_airplay_output(row):
+    """True for the placeholder CoreAudio device macOS adds while it streams to
+    an AirPlay speaker. It is identified by transport, not by its name, which
+    is the bare word "AirPlay" and could in principle be a device's own."""
+    return row.transport == "airp"
+
+
+def build(store, airplay_rows, scan_count=None, airplay_outputs=()):
     outputs = coreaudio.list_outputs()
     paired = bluetooth.paired_audio_devices()
 
@@ -130,6 +172,15 @@ def build(store, airplay_rows, scan_count=None):
             # Indicator only. Routing lives in Speakers…, and a switch that
             # merely toggles power sat teal on every row and meant nothing.
             can_toggle=False, needs_pairing=row["needs_pairing"],
+            # The switch selects: it makes this device the Mac's output, which
+            # sysoutput does through the Sound settings pane because CoreAudio
+            # cannot. Only a device with audio of its own gets one. Sending the
+            # Mac to a HomePod does work, but a HomePod is normally fed by
+            # something else, and two ways to start it playing — a switch here
+            # and a Speakers… menu there — contradict each other the moment one
+            # shows teal and the other does not.
+            can_select=(_is_source(row) and not row["needs_pairing"]
+                        and row.get("power_on", True)),
             power_on=row.get("power_on", True),
             receiving_from=row.get("receiving_from", ""),
             sending_to=row.get("sending_to", []),
@@ -138,8 +189,7 @@ def build(store, airplay_rows, scan_count=None):
             supports_output_devices=row.get("supports_output_devices", False),
             # A HomePod can technically forward audio, but it has none of its
             # own — offering the control only invites routing silence around.
-            can_send=(row.get("supports_output_devices", False)
-                      and row.get("model", "").lower().startswith(("gen", "appletv"))),
+            can_send=_is_source(row),
             detail=row["address"], note=note,
         ))
 
@@ -158,7 +208,7 @@ def build(store, airplay_rows, scan_count=None):
             key=key, name=DISPLAY_NAMES.get(out["name"], out["name"]),
             kind=kind, on=is_default, volume=volume,
             can_step=out.get("canSetVolume", False), is_default=is_default,
-            can_select=True, uid=uid,
+            can_select=True, uid=uid, transport=transport,
             detail=coreaudio.TRANSPORT_LABELS.get(transport, transport),
             note="muted" if out.get("muted") else "",
         ))
@@ -178,15 +228,50 @@ def build(store, airplay_rows, scan_count=None):
             row.note = f"playing from {row.receiving_from}"
         elif not row.power_on:
             row.note = "standby"
-        elif row.supports_output_devices and row.model.lower().startswith(("gen", "appletv")):
+        elif _row_is_source(row):
             row.note = "TV sound to Speakers…"
         else:
-            row.note = "on · idle"
+            # A HomePod has no switch, so an idle one has to say where the
+            # choice that starts it playing is actually made.
+            row.note = "idle · choose it in a Speakers… menu"
     rows.sort(key=lambda r: r.sort_key)
     store.save()
     # Read the active output BEFORE hiding anything: hiding the device that is
     # currently playing must not blank the "Playing through …" line, or the
     # sound has no visible source at all.
+    # While the Mac plays through an AirPlay speaker, CoreAudio publishes a
+    # device named "AirPlay" — a generic name for whichever speaker it is, with
+    # nothing in it to say which. Listing it would add a meaningless row and
+    # leave the speaker's own row looking inactive, so it is folded into the
+    # speakers named by `airplay_outputs`, which is what the app last routed
+    # to. Without those names the row is still dropped: a row called "AirPlay"
+    # tells the user nothing they can act on.
+    airplay_names = {r.name: r for r in rows if r.kind == "airplay"}
+    kept = []
+    for row in rows:
+        if row.kind == "local" and row.uid and _is_airplay_output(row):
+            # One placeholder device covers however many speakers are playing,
+            # so its active state is given to each of them.
+            for name in airplay_outputs:
+                twin = airplay_names.get(name)
+                if twin is None:
+                    continue
+                twin.is_default = twin.is_default or row.is_default
+                twin.uid = twin.uid or row.uid
+                if twin.volume is None:
+                    twin.volume = row.volume
+                    twin.can_step = twin.can_step or row.can_step
+            continue
+        # A speaker can also appear under its own name, on a Mac that does
+        # publish one; fold that in the same way rather than listing it twice.
+        twin = airplay_names.get(row.name) if row.kind == "local" else None
+        if twin is not None and twin is not row:
+            twin.is_default = twin.is_default or row.is_default
+            twin.uid = twin.uid or row.uid
+            continue
+        kept.append(row)
+    rows = kept
+
     default = next((r.name for r in rows if r.is_default), "")
     hidden_keys = store.hidden_keys()
     # From the store, NOT from rows: the agent skips hidden AirPlay speakers
@@ -200,12 +285,19 @@ def build(store, airplay_rows, scan_count=None):
     # A stopped agent reports no scan count at all, which previously fell
     # through every branch and left an empty list with no explanation.
     if not _agent_reachable():
-        # Quitting and relaunching MyAudio is the fix most people want, and
-        # it repoints the entry as well. `bootstrap` is the counterpart to
-        # the `bootout` in Help; `load` is its deprecated predecessor.
-        hint = ("AirPlay agent is not running, so no speakers can be found. "
-                "Quit and relaunch MyAudio to start it, or run:  launchctl bootstrap "
-                "gui/$(id -u) ~/Library/LaunchAgents/com.timmccoy.myaudioagent.plist")
+        if agentclient.starting():
+            # Launch just bootstrapped the agent and it has not opened its
+            # socket yet. Telling someone to quit and relaunch the app they
+            # have this second launched reads as a fault, when the speakers
+            # are seconds away.
+            hint = "Starting the AirPlay agent — speakers will appear in a moment."
+        else:
+            # Quitting and relaunching MyAudio is the fix most people want, and
+            # it repoints the entry as well. `bootstrap` is the counterpart to
+            # the `bootout` in Help; `load` is its deprecated predecessor.
+            hint = ("AirPlay agent is not running, so no speakers can be found. "
+                    "Quit and relaunch MyAudio to start it, or run:  launchctl bootstrap "
+                    "gui/$(id -u) ~/Library/LaunchAgents/com.timmccoy.myaudioagent.plist")
     elif scan_count == 0:
         hint = _no_speakers_hint()
     elif scan_count == -1:

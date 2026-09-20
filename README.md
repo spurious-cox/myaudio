@@ -59,10 +59,34 @@ a dash rather than a percentage. Local and Bluetooth devices show a percentage.
 output. Built-in outputs cannot be switched off — there is nowhere else for the
 sound to go — and MyAudio says so rather than doing nothing.
 
-**Sending this Mac's audio to an AirPlay speaker is not possible.** macOS does
-not expose that to an application. Use the Sound section of Control Center. What
-MyAudio does on an AirPlay row is set that speaker's own volume, and for a
-device that has audio of its own — an Apple TV — route where *its* sound goes.
+**Playing this Mac through an Apple TV.** Switch it on and the Mac plays
+through it, like any other output. CoreAudio has no device for an AirPlay
+speaker, so MyAudio opens the Sound settings pane, selects the speaker there
+and closes it again — the window appears for a second or two, and is left open
+if it already was. This needs Accessibility permission, which macOS asks for
+the first time. There is no "off" for a speaker: switch another output on
+instead. A speaker that is asleep or unpaired has no switch, because macOS
+will not route to it.
+
+**A HomePod has no switch.** It has no audio of its own — it plays what
+something else sends it — so it is chosen from a **Speakers…** menu on whatever
+is doing the playing: the Mac's own row sends the Music app to any speakers you
+tick, an Apple TV's row sends the Apple TV's sound to any you tick, and this Mac
+can be one of them. Several speakers at once works that way; the HomePod's row
+then reads "playing from" and the name of whatever is feeding it, in teal, and
+its volume controls work while it plays. An idle HomePod's row says so and points back at those menus.
+
+**One speaker at a time for the Mac itself.** The Mac has one output device, and
+macOS offers no way to send it to two AirPlay speakers together: Control
+Center's Sound panel replaces the selection just as the settings pane does.
+
+**Two devices with the same name cannot be told apart.** Nothing in the list
+distinguishes them, so rename one in the Home app before relying on the choice.
+Where MyAudio would have to pick between them — switching the Mac's output — it
+refuses and says so rather than playing into the wrong room.
+
+An AirPlay row also sets that speaker's own volume, and for a device with
+audio of its own — an Apple TV — routes where *its* sound goes.
 
 **Apple devices only.** HomePod, HomePod mini, Apple TV and AirPort Express are
 recognized. A Sonos, Denon or AirPlay-2 television is found on the network and
