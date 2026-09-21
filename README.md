@@ -175,6 +175,10 @@ removal steps — so they are to hand without this file.
 `build.sh` installs the launchd agent by calling the app's own setup code, so
 the path a new install depends on is exercised on every build.
 
+## Problems or suggestions
+
+Open an issue: https://github.com/spurious-cox/myaudio/issues
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
