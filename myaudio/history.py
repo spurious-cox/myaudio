@@ -1,4 +1,4 @@
-"""Version history shown under Help ▸ Version History — v1.1
+"""Version history shown under Help ▸ Version History — v1.2
 
 Newest first. Every future release must add an entry here — the window reads
 this list directly, so an unrecorded version is a visibly stale history.
@@ -16,6 +16,9 @@ GENERATED_BY = (
 
 # (version, date, summary)
 HISTORY = [
+    ("1.4.3", "2026-09-23",
+     "A new icon showing the TV, headphones, Mac, Apple TV and HomePods that "
+     "MyAudio connects, placed on the standard macOS icon grid."),
     ("1.4.2", "2026-09-19",
      "The version history had not been written since July, so the window "
      "showed nothing about any of the released versions. Every release since "
