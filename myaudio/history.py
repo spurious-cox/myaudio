@@ -16,6 +16,9 @@ GENERATED_BY = (
 
 # (version, date, summary)
 HISTORY = [
+    ("1.4.4", "2026-09-24",
+     "The icon is also an Icon Composer icon, so macOS 26 and later draw it "
+     "full size with the system's own shape instead of shrinking it onto a plate."),
     ("1.4.3", "2026-09-23",
      "A new icon showing the TV, headphones, Mac, Apple TV and HomePods that "
      "MyAudio connects, placed on the standard macOS icon grid."),

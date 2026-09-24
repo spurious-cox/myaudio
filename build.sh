@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Build, sign and install MyAudio.app  — v1.5
+# Build, sign and install MyAudio.app  — v1.6.0
 #
 # Signing uses the Apple Development certificate (renewed 2026-08-05, valid to
 # 2027-08-05). A STABLE signing identity is what keeps Little Snitch rules alive
@@ -51,6 +51,11 @@ sleep 1
 echo "==> building"
 rm -rf build dist
 ./venv/bin/python setup.py py2app >/dev/null
+
+# macOS 26+ draws an app that has only an .icns shrunk onto a plain plate.
+# The Icon Composer document compiles into Assets.car, which macOS 26+ uses
+# instead; the .icns from setup.py is still what macOS 13-25 show.
+~/bin/glass_icon dist/MyAudio.app icon/AppIcon.icon
 
 echo "==> copying the Tcl/Tk script libraries into the bundle"
 # py2app relinks the tcl and tk dylibs into Contents/Frameworks but leaves their
