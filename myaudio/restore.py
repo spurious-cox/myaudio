@@ -1,4 +1,4 @@
-"""Capture device state at launch and put it back on request — v1.1
+"""Capture device state at launch, put it back on request, clear routing — v1.2
 
 MyAudio is a remote control, not a session: every change it makes is written to
 the real device and outlives the app. This module is the opt-in exception —
@@ -16,6 +16,11 @@ agent was out of file descriptors, so the capture stored [] for the Apple TV
 and the restore skipped silently; the TV was left sending its sound to the Mac
 and stayed that way after MyAudio quit. A restore that cannot do its job now
 says so in the log and in its own summary.
+
+v1.2: clear_routing() sends every source's audio back to itself -- each Apple
+TV plays only through its own speakers and Music plays only on this Mac. The
+app runs it at launch and at quit, because a routing lives ON the device and
+otherwise outlives the app.
 """
 
 import json
@@ -102,6 +107,48 @@ def load():
             return json.load(handle)
     except (OSError, ValueError):
         return None
+
+
+def clear_routing(agent):
+    """Send every source's audio back to itself. Returns (changed, failed).
+
+    An Apple TV's output set is emptied, which leaves it playing through its
+    own speakers only. Music is left playing on this Mac alone. Volumes,
+    Bluetooth connections and the Mac's own output are not touched.
+    """
+    changed = []
+    failed = []
+
+    speakers = musicroute.devices()
+    for speaker in speakers:
+        if speaker["selected"] and speaker["kind"] != musicroute.COMPUTER_KIND:
+            ok, _ = musicroute.set_selected(speaker["name"], False)
+            if ok:
+                changed.append(f"Music off {speaker['name']}")
+            else:
+                failed.append(f"Music would not leave {speaker['name']}")
+
+    for speaker in agent.poll():
+        ok, options = agent.output_devices(speaker["key"])
+        if not ok:
+            # A HomePod has no output set to read; only a real failure on a
+            # device that has one is worth reporting.
+            if speaker.get("supports_output_devices"):
+                failed.append(f"{speaker['name']} outputs could not be read")
+            continue
+        sending = [o["name"] for o in options if o["selected"]]
+        if not sending:
+            continue
+        ok, _ = agent.set_output_devices(speaker["key"], [])
+        if ok:
+            changed.append(f"{speaker['name']} no longer sends to {', '.join(sending)}")
+        else:
+            failed.append(f"{speaker['name']} outputs would not clear")
+
+    log.info("cleared routing: %d change(s): %s", len(changed), changed)
+    if failed:
+        log.warning("routing NOT fully cleared: %s", failed)
+    return changed, failed
 
 
 def restore(snapshot, agent):

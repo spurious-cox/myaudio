@@ -95,6 +95,14 @@ then ignored.
 **Apple TV pairing.** An Apple TV needs to be paired before its volume or
 routing can be controlled. The row offers **Pair…** and shows the PIN prompt.
 
+## Routing is cleared at launch and quit
+
+Opening MyAudio and quitting it both clear speaker routing: every Apple TV goes
+back to playing through its own speakers, and Music back to this Mac. An Apple
+TV stores its routing itself, so without this it would go on sending its sound
+elsewhere after MyAudio had quit. Volumes and Bluetooth connections are left as
+they are.
+
 ## Restore on exit
 
 The switch at the bottom of the window puts every volume, connection and speaker

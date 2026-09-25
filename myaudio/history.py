@@ -1,4 +1,4 @@
-"""Version history shown under Help ▸ Version History — v1.2
+"""Version history shown under Help ▸ Version History — v1.3
 
 Newest first. Every future release must add an entry here — the window reads
 this list directly, so an unrecorded version is a visibly stale history.
@@ -16,6 +16,12 @@ GENERATED_BY = (
 
 # (version, date, summary)
 HISTORY = [
+    ("1.5.0", "2026-09-25",
+     "MyAudio starts and ends with no speaker routing: at launch and again "
+     "at quit, every Apple TV goes back to playing through its own speakers "
+     "and Music back to this Mac. A routing is stored on the device, so an "
+     "Apple TV used to go on sending its sound to the Mac after MyAudio had "
+     "quit. Volumes and Bluetooth connections are left as they are."),
     ("1.4.4", "2026-09-24",
      "The icon is also an Icon Composer icon, so macOS 26 and later draw it "
      "full size with the system's own shape instead of shrinking it onto a plate."),

@@ -1,4 +1,4 @@
-"""The Help window's text — v2.5
+"""The Help window's text — v2.6
 
 Kept apart from the window that shows it so the wording can be edited without
 touching layout code, and so the README can quote the same sentences.
@@ -32,6 +32,10 @@ SECTIONS = (
         "speakers, anything paired over Bluetooth, and AirPlay speakers on "
         "the network. Switch the output, set a volume, connect or disconnect "
         "a Bluetooth device, and send Music to an AirPlay speaker.",
+        "Opening and quitting MyAudio both clear speaker routing: every "
+        "Apple TV goes back to playing through its own speakers, and Music "
+        "back to this Mac. Volumes and Bluetooth connections are left as "
+        "they are.",
         "The switch at the bottom left puts everything back the way it was "
         "when MyAudio opened — every volume, connection and routing — and "
         "quits.",

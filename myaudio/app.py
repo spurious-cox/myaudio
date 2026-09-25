@@ -1,7 +1,11 @@
-"""MyAudio — audio output panel — v1.2.1
+"""MyAudio — audio output panel — v1.3.0
 
 v1.2: any device can be hidden from the list, and brought back from
 the Hidden button in the header.
+
+v1.3: speaker routing is cleared at launch and again at quit, so MyAudio
+always starts and ends with every Apple TV on its own speakers and Music on
+this Mac.
 """
 
 import logging
@@ -60,6 +64,7 @@ DANGER = _PALETTE["danger"]
 
 KIND_LABELS = {"bluetooth": "Bluetooth", "airplay": "AirPlay", "local": "Output"}
 POLL_MS = 2500
+CLOSE_LIMIT_MS = 15000       # longest a quit waits for routing to clear
 
 log = logging.getLogger(__name__)
 
@@ -657,9 +662,11 @@ class MyAudio(tk.Tk):
         self.hint.pack_forget()
 
         self.after(200, self._poll)
-        # Photograph the devices as we found them, so the restore switch has
-        # something to put back. Off the UI thread: it queries every device.
-        threading.Thread(target=self._capture_opening_state, daemon=True).start()
+        # Clear any routing left on the devices, then photograph them, so the
+        # restore switch puts back the cleared routing and the volumes as they
+        # were. Off the UI thread: it queries every device.
+        self._closing = False
+        threading.Thread(target=self._clear_then_capture, daemon=True).start()
         # After the first snapshot exists, check whether the Mac is already
         # streaming to a speaker and to which one.
         self.after(3000, lambda: threading.Thread(
@@ -669,8 +676,8 @@ class MyAudio(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self._close)
         # ⌘Q and the Quit menu item bypass WM_DELETE_WINDOW on macOS, so they
         # were terminating the app without saving preferences. Route them
-        # through the same close path. Neither restores devices — that stays
-        # deliberate, and is what the red switch is for.
+        # through the same close path. It clears speaker routing but restores
+        # nothing else — volumes are what the red switch is for.
         try:
             self.createcommand("::tk::mac::Quit", self._close)
         except tk.TclError:
@@ -731,6 +738,21 @@ class MyAudio(tk.Tk):
             ok, options = self.airplay.output_devices(row.key)
             if ok:
                 self._speaker_cache[row.key] = options
+
+    def _clear_then_capture(self):
+        # The agent may still be starting, and output sets can only be read
+        # once its first scan has finished.
+        deadline = time.time() + 30
+        while time.time() < deadline:
+            self.airplay.poll()
+            if self.airplay.last_scan_count is not None:
+                break
+            time.sleep(1)
+        try:
+            restore.clear_routing(self.airplay)
+        except Exception:
+            log.exception("could not clear routing at launch")
+        self._capture_opening_state()
 
     def _capture_opening_state(self):
         try:
@@ -1237,7 +1259,32 @@ class MyAudio(tk.Tk):
         self.minsize(width, min(height, 320))
 
     def _close(self):
+        """Clear speaker routing, then quit.
+
+        A routing lives on the device, so without this an Apple TV went on
+        sending its sound to this Mac after MyAudio had gone.
+        """
+        if self._closing:
+            return
+        self._closing = True
         self.store.save()
+        self.status.config(text="Clearing speakers…")
+
+        def work():
+            try:
+                restore.clear_routing(self.airplay)
+            except Exception:
+                log.exception("could not clear routing at quit")
+            self.after(0, self._finish_close)
+
+        threading.Thread(target=work, daemon=True).start()
+        # A hung agent can hold each call for its full timeout; quit anyway.
+        self.after(CLOSE_LIMIT_MS, self._finish_close)
+
+    def _finish_close(self):
+        if getattr(self, "_destroyed", False):
+            return
+        self._destroyed = True
         self.destroy()
 
 
