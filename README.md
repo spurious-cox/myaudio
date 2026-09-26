@@ -173,6 +173,9 @@ The **Help** button at the bottom right of the window covers what the app
 does, the permissions it needs, which speakers it supports, and these
 removal steps — so they are to hand without this file.
 
+**Help ▸ Check for Updates…** compares your copy with the newest release on
+GitHub and offers its download page when there is a newer one.
+
 ## Building
 
 ```

@@ -16,6 +16,9 @@ GENERATED_BY = (
 
 # (version, date, summary)
 HISTORY = [
+    ("1.6.0", "2026-09-26",
+     "Help ▸ Check for Updates… asks GitHub for the newest release and offers "
+     "its download page when it is newer than the copy you are running."),
     ("1.5.0", "2026-09-25",
      "MyAudio starts and ends with no speaker routing: at launch and again "
      "at quit, every Apple TV goes back to playing through its own speakers "

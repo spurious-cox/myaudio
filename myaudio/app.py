@@ -1,4 +1,4 @@
-"""MyAudio — audio output panel — v1.3.0
+"""MyAudio — audio output panel — v1.6.0
 
 v1.2: any device can be hidden from the list, and brought back from
 the Hidden button in the header.
@@ -6,14 +6,20 @@ the Hidden button in the header.
 v1.3: speaker routing is cleared at launch and again at quit, so MyAudio
 always starts and ends with every Apple TV on its own speakers and Music on
 this Mac.
+
+v1.6: Help ▸ Check for Updates… compares this version with the newest
+GitHub release.
 """
 
+import json
 import logging
 import os
+import re
 import subprocess
 import threading
 import time
 import tkinter as tk
+from tkinter import messagebox
 
 from . import __version__, bluetooth, coreaudio, devices, history, levelcsv, musicroute, restore
 from . import sysoutput
@@ -261,6 +267,35 @@ def _share_menu(window, parent):
             window.configure(menu=menubar)
         except tk.TclError:
             pass
+
+
+RELEASES_API = "https://api.github.com/repos/spurious-cox/myaudio/releases/latest"
+RELEASES_PAGE = "https://github.com/spurious-cox/myaudio/releases/latest"
+CASK = "spurious-cox/tap/myaudio"
+
+
+def latest_release():
+    """(version, page url) of the newest published release, or None when
+    GitHub cannot be reached or answers with something unexpected.
+
+    curl rather than urllib: it uses the system's certificate store, which
+    a bundled Python does not have.
+    """
+    try:
+        out = subprocess.run(
+            ["/usr/bin/curl", "-sfL", "--max-time", "10",
+             "-H", "Accept: application/vnd.github+json", RELEASES_API],
+            capture_output=True, timeout=15, check=True).stdout
+        data = json.loads(out)
+        return (str(data["tag_name"]).lstrip("v"),
+                str(data.get("html_url") or RELEASES_PAGE))
+    except (OSError, subprocess.SubprocessError, ValueError, KeyError,
+            TypeError):
+        return None
+
+
+def version_tuple(text):
+    return tuple(int(part) for part in re.findall(r"\d+", str(text)))
 
 
 class PinDialog(tk.Toplevel):
@@ -720,7 +755,38 @@ class MyAudio(tk.Tk):
         helpmenu.add_command(label="MyAudio Help", command=self.show_help)
         helpmenu.add_command(label="MyAudio Version History",
                              command=self._show_history)
+        helpmenu.add_command(label="Check for Updates…",
+                             command=self._check_updates)
         self.configure(menu=menubar)
+
+    def _check_updates(self):
+        # The request can take seconds on a slow network; the panel keeps
+        # polling meanwhile.
+        def fetch():
+            found = latest_release()
+            self.after(0, lambda: self._show_latest(found))
+        threading.Thread(target=fetch, daemon=True).start()
+
+    def _show_latest(self, found):
+        if not found:
+            messagebox.showwarning(
+                "Couldn’t check for updates",
+                "GitHub could not be reached. Check the network connection "
+                "and try again.", parent=self)
+            return
+        latest, page = found
+        if version_tuple(latest) <= version_tuple(__version__):
+            messagebox.showinfo(
+                "MyAudio is up to date",
+                f"You have {__version__}, the newest version.", parent=self)
+            return
+        if messagebox.askyesno(
+                f"MyAudio {latest} is available",
+                f"You have {__version__}. Quit MyAudio before installing the "
+                f"new version.\n\nInstalled with Homebrew? Run:\n"
+                f"brew upgrade --cask {CASK}\n\nOpen the download page?",
+                parent=self):
+            subprocess.run(["/usr/bin/open", page], check=False)
 
     def _prefetch_speakers(self):
         """Fetch the speaker lists up front so the dialog opens filled in.
