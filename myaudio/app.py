@@ -1,4 +1,4 @@
-"""MyAudio — audio output panel — v1.6.0
+"""MyAudio — audio output panel — v1.6.1
 
 v1.2: any device can be hidden from the list, and brought back from
 the Hidden button in the header.
@@ -9,6 +9,8 @@ this Mac.
 
 v1.6: Help ▸ Check for Updates… compares this version with the newest
 GitHub release.
+
+v1.6.1: the window opens where it was when MyAudio last quit.
 """
 
 import json
@@ -25,7 +27,7 @@ from . import __version__, bluetooth, coreaudio, devices, history, levelcsv, mus
 from . import sysoutput
 from . import helptext
 from .agentclient import AgentClient, ensure_agent
-from .config import VOLUME_STEP, Store
+from .config import SUPPORT_DIR, VOLUME_STEP, Store
 
 # Two palettes, chosen once at launch. The names below are used in about
 # fifty places, so the appearance is switched by rebinding them rather than
@@ -708,6 +710,7 @@ class MyAudio(tk.Tk):
             target=self._confirm_airplay_output, daemon=True).start())
         threading.Thread(target=self._prefetch_speakers, daemon=True).start()
         self._build_menu()
+        self._restore_position()
         self.protocol("WM_DELETE_WINDOW", self._close)
         # ⌘Q and the Quit menu item bypass WM_DELETE_WINDOW on macOS, so they
         # were terminating the app without saving preferences. Route them
@@ -1351,10 +1354,42 @@ class MyAudio(tk.Tk):
         if getattr(self, "_destroyed", False):
             return
         self._destroyed = True
+        self._save_position()
         self.destroy()
+
+    def _save_position(self):
+        """Every way out — the red button, ⌘Q, Quit from the Dock and the
+        restore switch — ends here, so this is the one place to record it."""
+        match = re.match(r"\d+x\d+\+?(-?\d+)\+?(-?\d+)$", self.geometry())
+        if not match:
+            return
+        try:
+            os.makedirs(SUPPORT_DIR, exist_ok=True)
+            with open(WINDOW_PATH, "w") as fh:
+                json.dump({"x": int(match.group(1)), "y": int(match.group(2))}, fh)
+        except OSError:
+            log.exception("could not save the window position")
+
+    def _restore_position(self):
+        """Put the window back where it was, unless that is no longer on a
+        screen — a display unplugged since, or a smaller one. Only the
+        position is kept; the size still follows the device list."""
+        try:
+            with open(WINDOW_PATH) as fh:
+                saved = json.load(fh)
+            x, y = int(saved["x"]), int(saved["y"])
+        except (OSError, ValueError, KeyError, TypeError):
+            return
+        self.update_idletasks()
+        left, top = self.winfo_vrootx(), self.winfo_vrooty()
+        right = left + self.winfo_vrootwidth() - 100
+        bottom = top + self.winfo_vrootheight() - 100
+        if left <= x <= right and top <= y <= bottom:
+            self.geometry(f"+{x}+{y}")
 
 
 LOG_PATH = os.path.expanduser("~/Library/Logs/MyAudio.log")
+WINDOW_PATH = os.path.join(SUPPORT_DIR, "window.json")
 
 
 def main():

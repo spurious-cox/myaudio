@@ -16,6 +16,9 @@ GENERATED_BY = (
 
 # (version, date, summary)
 HISTORY = [
+    ("1.6.1", "2026-09-26",
+     "The window opens where it was when MyAudio last quit, unless that spot "
+     "is no longer on a screen."),
     ("1.6.0", "2026-09-26",
      "Help ▸ Check for Updates… asks GitHub for the newest release and offers "
      "its download page when it is newer than the copy you are running."),
