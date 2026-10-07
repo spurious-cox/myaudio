@@ -1,4 +1,4 @@
-"""MyAudio — audio output panel — v1.6.1
+"""MyAudio — audio output panel — v1.7.0
 
 v1.2: any device can be hidden from the list, and brought back from
 the Hidden button in the header.
@@ -11,6 +11,9 @@ v1.6: Help ▸ Check for Updates… compares this version with the newest
 GitHub release.
 
 v1.6.1: the window opens where it was when MyAudio last quit.
+
+v1.7.0: a quiet check for a newer release when MyAudio opens, shown beside the
+version in the header; and the Read Me travels inside the app.
 """
 
 import json
@@ -298,6 +301,46 @@ def latest_release():
 
 def version_tuple(text):
     return tuple(int(part) for part in re.findall(r"\d+", str(text)))
+
+
+UPDATE_FILE = os.path.join(SUPPORT_DIR, "update_check.json")
+
+
+def quiet_update_line():
+    """"Update available: X.Y.Z - brew upgrade --cask myaudio", or "".
+
+    The check every PixPro app makes when it opens: asked at most once a day
+    (the answer is kept beside the app's other data), three seconds at the
+    longest, and silent when this build is current or GitHub cannot be
+    reached.
+    """
+    today = time.strftime("%Y-%m-%d")
+    try:
+        with open(UPDATE_FILE) as fh:
+            kept = json.load(fh)
+    except (OSError, ValueError):
+        kept = {}
+    if kept.get("day") == today:
+        tag = str(kept.get("tag") or "")
+    else:
+        try:
+            out = subprocess.run(
+                ["/usr/bin/curl", "-sfL", "--max-time", "3",
+                 "-H", "Accept: application/vnd.github+json", RELEASES_API],
+                capture_output=True, timeout=8, check=True).stdout
+            tag = str(json.loads(out)["tag_name"]).lstrip("v")
+        except (OSError, subprocess.SubprocessError, ValueError, KeyError,
+                TypeError):
+            return ""
+        try:
+            os.makedirs(SUPPORT_DIR, exist_ok=True)
+            with open(UPDATE_FILE, "w") as fh:
+                json.dump({"day": today, "tag": tag}, fh)
+        except OSError:
+            pass
+    if not tag or version_tuple(tag) <= version_tuple(__version__):
+        return ""
+    return f"Update available: {tag}  —  brew upgrade --cask myaudio"
 
 
 class PinDialog(tk.Toplevel):
@@ -665,8 +708,16 @@ class MyAudio(tk.Tk):
         title.grid(row=0, column=0, sticky="w")
         tk.Label(title, text="MyAudio", bg=BG, fg=TEXT,
                  font=("SF Pro Display", 20, "bold")).pack(side="left")
-        tk.Label(title, text=f"v{__version__}", bg=BG, fg=DIM,
-                 font=("SF Pro Text", 11)).pack(side="left", padx=(6, 0), pady=(6, 0))
+        self.version_label = tk.Label(
+            title, text=f"v{__version__}", bg=BG, fg=DIM,
+            font=("SF Pro Text", 11))
+        self.version_label.pack(side="left", padx=(6, 0), pady=(6, 0))
+        # The quiet check: once, in the background, when the app opens.
+        def look():
+            line = quiet_update_line()
+            if line:
+                self.after(0, lambda: self._show_update_line(line))
+        threading.Thread(target=look, daemon=True).start()
         self.status = tk.Label(header, text="Scanning…", bg=BG, fg=DIM,
                                font=("SF Pro Text", 11), anchor="w")
         self.status.grid(row=0, column=1, sticky="w", padx=12)
@@ -761,6 +812,16 @@ class MyAudio(tk.Tk):
         helpmenu.add_command(label="Check for Updates…",
                              command=self._check_updates)
         self.configure(menu=menubar)
+
+    def _show_update_line(self, line):
+        """Put the update notice beside the version; clicking it opens the
+        release page."""
+        self.version_label.config(
+            text=f"v{__version__}   ·   {line}", fg=ACCENT, cursor="pointinghand")
+        self.version_label.bind(
+            "<Button-1>",
+            lambda _e: subprocess.run(["/usr/bin/open", RELEASES_PAGE],
+                                      check=False))
 
     def _check_updates(self):
         # The request can take seconds on a slow network; the panel keeps

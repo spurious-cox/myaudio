@@ -17,7 +17,10 @@ APP = ["main.py"]
 # launchd still owns it -- that is what holds Local Network permission -- but
 # the plist is now written at launch by agentclient.ensure_agent(), pointing
 # at wherever this bundle actually is.
-DATA_FILES = [("", ["helper/coreaudio_helper", "agent/myaudio_agent.py"])]
+# MyAudio-README.txt is made from README.md by build.sh; it is the Help that
+# Flache opens from this app's icon.
+DATA_FILES = [("", ["helper/coreaudio_helper", "agent/myaudio_agent.py",
+                    "MyAudio-README.txt"])]
 
 OPTIONS = {
     "argv_emulation": False,

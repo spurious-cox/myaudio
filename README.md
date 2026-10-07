@@ -176,6 +176,18 @@ removal steps — so they are to hand without this file.
 **Help ▸ Check for Updates…** compares your copy with the newest release on
 GitHub and offers its download page when there is a newer one.
 
+## Updates
+
+When MyAudio opens it asks GitHub whether a newer release exists — at most
+once a day, giving up after three seconds — and says nothing if you are up to
+date or offline. If there is a newer one, the header says it beside the
+version:
+
+    Update available: X.Y.Z  —  brew upgrade --cask myaudio
+
+and clicking it opens the release page. It only ever reports: nothing is
+downloaded and nothing replaces itself.
+
 ## Building
 
 ```

@@ -16,6 +16,12 @@ GENERATED_BY = (
 
 # (version, date, summary)
 HISTORY = [
+    ("1.7.0", "2026-10-06",
+     "MyAudio checks for a newer release once, quietly, when it opens: at most "
+     "once a day, three seconds at the longest, and silent when it is current or "
+     "the network is away. A newer one is shown beside the version in the "
+     "header with the brew upgrade line. The Read Me also travels inside the "
+     "app, which is what Flache opens as its Help."),
     ("1.6.1", "2026-09-26",
      "The window opens where it was when MyAudio last quit, unless that spot "
      "is no longer on a screen."),

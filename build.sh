@@ -50,6 +50,9 @@ sleep 1
 
 echo "==> building"
 rm -rf build dist
+# The Help Flache opens from this app's icon: MyAudio-README.txt in Resources,
+# made from README.md so there is one source.
+/usr/bin/python3 "$HOME/My_Applications/_signing/pixpro_readme_txt.py" README.md MyAudio-README.txt
 ./venv/bin/python setup.py py2app >/dev/null
 
 # macOS 26+ draws an app that has only an .icns shrunk onto a plain plate.
@@ -63,7 +66,11 @@ echo "==> copying the Tcl/Tk script libraries into the bundle"
 # this machine's Homebrew. Without these the app dies on any other Mac with
 # "Cannot find a usable init.tcl". main.py points TCL_LIBRARY/TK_LIBRARY here.
 TCLTK="$(brew --prefix tcl-tk)/lib"
-for d in tcl9.0 tk9.0; do
+# The version of the Tcl/Tk the interpreter was built against, not a number
+# typed here: Homebrew moved tcl-tk from 9.0 to 9.1 and the hard-coded
+# directories no longer existed.
+TKV=$(./venv/bin/python -c 'import tkinter; print(tkinter.TkVersion)')
+for d in tcl$TKV tk$TKV; do
     [[ -d "$TCLTK/$d" ]] || { print -u2 "error: $TCLTK/$d not found"; exit 1; }
     ditto "$TCLTK/$d" "dist/MyAudio.app/Contents/Resources/lib/$d"
 done
